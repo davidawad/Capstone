@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Int32
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from styx_msgs.msg import Lane, Waypoint
 import tf
 import math
+import copy
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -28,19 +30,24 @@ class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
 
+        self.pose = None
+        self.waypoints = None
+        self.traffic_waypoint = None
+        self.current_velocity = None
+
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        self.wp_sub = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
-#	rospy.Subscriber('/traffic_waypoint', Int32, traffic_cb)
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('current_velocity', TwistStamped, self.velocity_cb )
+
 #	rospy.Subscriber('/obstacle_waypoint', Int32, obstacle_cb)
 
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
-        self.pose = None
-        self.waypoints = None
         self.loop()
 
     def loop(self):
@@ -62,6 +69,8 @@ class WaypointUpdater(object):
         # TODO: Implement
     	rospy.loginfo('base_waypoints received - size:%s', len(waypoints.waypoints))
     	self.waypoints = waypoints.waypoints
+        # only need once.  unregister it
+        self.wp_sub.unregister()
 
 
     def traffic_cb(self, msg): ## msg type Int32
@@ -71,6 +80,9 @@ class WaypointUpdater(object):
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
     	self.obstacle_waypoint = msg
+
+    def velocity_cb(self, msg): # geometry_msgs/TwistStamped
+        self.current_velocity = msg.twist
 
     def get_waypoint_velocity(self, waypoint):
         return waypoint.twist.twist.linear.x
@@ -155,7 +167,13 @@ class WaypointUpdater(object):
 
         theta = self.get_current_yaw()
         index = self.next_waypoint( self.pose.pose.position, theta )
-        self.final_waypoints = self.waypoints[index:index+LOOKAHEAD_WPS]
+        self.final_waypoints = []
+        len1 = len(self.waypoints)
+        for i in range(LOOKAHEAD_WPS):
+            wp = (i+index) % len1
+            waypoint = copy.deepcopy(self.waypoints[wp])
+            self.final_waypoints.append(waypoint)
+
 
         rospy.loginfo('final_waypoint index:%s', index)
 

@@ -85,7 +85,7 @@ class DBWNode(object):
                 angular_velocity = self.twist_cmd.angular.z
                 current_velocity = self.velocity.linear.x
                 steering = self.yaw_controller.get_steering( linear_velocity, angular_velocity, current_velocity)
-                if ( current_velocity > 5):
+                if ( current_velocity > linear_velocity):
                     throttle = 0
                 else:
                     throttle = 0.5
