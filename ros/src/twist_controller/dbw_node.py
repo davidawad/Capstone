@@ -55,7 +55,7 @@ class DBWNode(object):
     	self.count = 0
         self.twist_cmd = None
         self.velocity = None
-
+        
         SET_SPEED = 10 # mph
         # TODO: Create `TwistController` object
         # self.controller = TwistController(<Arguments you wish to provide>)
@@ -87,10 +87,17 @@ class DBWNode(object):
                 steering = self.yaw_controller.get_steering( linear_velocity, angular_velocity, current_velocity)
                 if ( current_velocity > linear_velocity):
                     throttle = 0
+                    vel_diff = current_velocity - linear_velocity
+                    if vel_diff > 5:
+                        brake = 20000
+                    elif vel_diff > 1.5:
+                        brake = 10000
+                    else:
+                        brake = 0
+
                 else:
                     throttle = 0.5
-
-                brake = 0
+                    brake = 0
 
             	self.publish(throttle, brake, steering)
 
