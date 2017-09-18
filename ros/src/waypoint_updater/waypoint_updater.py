@@ -7,7 +7,8 @@ from styx_msgs.msg import Lane, Waypoint
 import tf
 import math
 import copy
-
+import numpy as np
+from scipy import interpolate
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
 
@@ -23,7 +24,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 
 
 class WaypointUpdater(object):
@@ -32,8 +33,9 @@ class WaypointUpdater(object):
 
         self.pose = None
         self.waypoints = None
-        self.traffic_waypoint = None
+        self.traffic_waypoint = -1
         self.current_velocity = None
+        self.state = 0 
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         self.wp_sub = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -75,7 +77,9 @@ class WaypointUpdater(object):
 
     def traffic_cb(self, msg): ## msg type Int32
         # TODO: Callback for /traffic_waypoint message. Implement
-        self.traffic_waypoint = msg
+        self.traffic_waypoint = msg.data
+        if self.traffic_waypoint != -1:
+            rospy.loginfo("traffic_waypoint: %s", msg)
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -93,17 +97,18 @@ class WaypointUpdater(object):
     def wp_distance(self, waypoints, wp1, wp2):
         dist = 0
         dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
+        len_waypoints = len(waypoints)
         for i in range(wp1, wp2+1):
             dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
             wp1 = i
         return dist
 
     def distance_2d(self, a, b):
-        return math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2)
+        return ((a.x-b.x)**2 + (a.y-b.y)**2)
 
 
     def closest_waypoint(self, position):
-        closest_len = 100000
+        closest_len = 1e6
         closest_index = 0
         for i in range(len(self.waypoints)):
             dist = self.distance_2d( position, self.waypoints[i].pose.pose.position)
@@ -125,35 +130,6 @@ class WaypointUpdater(object):
 
     	return index
 
-    # def get_frenet_s(self, position, theta):
-    # 	next_wp = self.next_waypoint(position, theta)
-    # 	prev_wp = next_wp-1
-
-    # 	if prev_wp < 0:
-    # 	    prev_wp += len(self.waypoints)
-
-    # 	n_x = self.waypoints[next_wp].pose.pose.position.x-self.waypoints[prev_wp].pose.pose.position.x
-    # 	n_y = self.waypoints[next_wp].pose.pose.position.y-self.waypoints[prev_wp].pose.pose.position.y
-    # 	n_z = self.waypoints[next_wp].pose.pose.position.z-self.waypoints[prev_wp].pose.pose.position.z
-    # 	x_x = position.x - self.waypoints[prev_wp].pose.pose.position.x
-    # 	x_y = position.y - self.waypoints[prev_wp].pose.pose.position.y
-    # 	x_z = position.z - self.waypoints[prev_wp].pose.pose.position.z
-    # 	#  find the projection of x onto n
-    #     proj_norm = (x_x*n_x+x_y*n_y)/(n_x*n_x+n_y*n_y+n_z*n_z)
-
-    # 	p_proj = Point()
-    #     p_proj.x = proj_norm*n_x
-    #     p_proj.y = proj_norm*n_y
-    # 	p_proj.z = proj_norm.n_z
-    # 	p0 = Point()
-    # 	p0.x = 0
-    # 	p0.y = 0
-    # 	p0.z = 0
-
-    #     frenet_s = self.wp_distance(0, prev_wp)
-    #     frenet_s += self.dl(p0, p_proj)
-    #     return frenet_s
-
     def get_current_yaw(self):
         orientation = [ 
             self.pose.pose.orientation.x, 
@@ -163,18 +139,62 @@ class WaypointUpdater(object):
         euler = tf.transformations.euler_from_quaternion(orientation)
         return euler[2]   # z direction
 
+    def deceleration_waypoints(self, waypoints, stop_index, start_velocity):
+        stop_distance = self.wp_distance(waypoints, 0, stop_index)
+        # estimate distance per waypoint
+        s0 = self.wp_distance(waypoints, 0, 1)
+
+        x = np.array([-s0, 0, stop_distance, stop_distance+s0, stop_distance+s0*2])
+        y = np.array([start_velocity, start_velocity, 0, 0, 0])
+        tck = interpolate.splrep(x, y, s=0)
+        xnew = 0
+        for i in range(1, len(waypoints)):
+            if ( i < stop_index):
+                xnew += self.wp_distance(waypoints, i-1, i)
+                ynew = interpolate.splev(xnew, tck, der=0)
+                self.set_waypoint_velocity(waypoints, i, ynew)
+            else:
+                self.set_waypoint_velocity(waypoints, i, 0)
+
     def update_final_waypoints(self):
 
         theta = self.get_current_yaw()
         index = self.next_waypoint( self.pose.pose.position, theta )
-        self.final_waypoints = []
+        final_waypoints = []
         len1 = len(self.waypoints)
         for i in range(LOOKAHEAD_WPS):
             wp = (i+index) % len1
             waypoint = copy.deepcopy(self.waypoints[wp])
-            self.final_waypoints.append(waypoint)
+            final_waypoints.append(waypoint)
 
+        if self.state ==0:
+            if (self.traffic_waypoint != -1) and \
+               (index < self.traffic_waypoint) and \
+               ((self.traffic_waypoint - index) < LOOKAHEAD_WPS):
 
+                start_velocity = self.get_waypoint_velocity(final_waypoints[0]) 
+                self.deceleration_waypoints(final_waypoints, self.traffic_waypoint-index, start_velocity)
+                self.decel_index = index
+                self.decel_waypoints = copy.deepcopy(final_waypoints)
+                self.state = 1
+
+        elif self.state == 1:
+
+            if (self.traffic_waypoint != -1):
+                # reuse previous generate waypoints velocity
+                for i in range(LOOKAHEAD_WPS):
+                    offset_index = i + index - self.decel_index
+                    if ( offset_index < LOOKAHEAD_WPS):
+                        vel = self.get_waypoint_velocity(self.decel_waypoints[offset_index])
+                        self.set_waypoint_velocity(final_waypoints, i, vel)
+                    else:
+                        self.set_waypoint_velocity(final_waypoints, i, 0.0)
+            else:
+                self.state = 0
+
+        ## elif self.state == 2:
+
+        self.final_waypoints = final_waypoints
         rospy.loginfo('final_waypoint index:%s', index)
 
     def publish_final_waypoints(self):
