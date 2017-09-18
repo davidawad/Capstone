@@ -8,10 +8,8 @@ from flask import Flask, render_template
 
 from bridge import Bridge
 from conf import conf
-# try to solve problem in Windows simulator
-sio = socketio.Server(async_mode='eventlet')
-eventlet.monkey_patch()
-# sio = socketio.Server()
+
+sio = socketio.Server()
 app = Flask(__name__)
 bridge = Bridge(conf)
 msgs = []
