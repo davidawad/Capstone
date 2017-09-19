@@ -163,6 +163,7 @@ class WaypointUpdater(object):
             if ( i < stop_index):
                 xnew += self.wp_distance(waypoints, i-1, i)
                 ynew = interpolate.splev(xnew, tck, der=0)
+                ynew = min(start_velocity, ynew)
                 self.set_waypoint_velocity(waypoints, i, ynew)
             else:
                 self.set_waypoint_velocity(waypoints, i, 0)
