@@ -76,6 +76,7 @@ class DBWNode(object):
         rospy.Subscriber('current_velocity', TwistStamped, self.velocity_cb, queue_size = 1)
         rospy.Subscriber('/final_waypoints',Lane, self.final_wp, queue_size = 1)
 
+
         self.loop()
 
     def loop(self):
