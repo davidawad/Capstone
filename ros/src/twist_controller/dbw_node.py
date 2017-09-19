@@ -77,6 +77,7 @@ class DBWNode(object):
         rospy.Subscriber('/final_waypoints',Lane, self.final_wp, queue_size = 1)
 
 
+
         self.loop()
 
     def loop(self):
@@ -95,7 +96,7 @@ class DBWNode(object):
                 target_velocity = self.twist_cmd.linear.x
                 angular_velocity = self.twist_cmd.angular.z
                 current_velocity = self.velocity.linear.x
-                linear_velocity = self.final_wps[0].twist.twist.linear.x
+                #linear_velocity = self.final_wps[0].twist.twist.linear.x
 
                 # Call Controllers to calculate and return variables to be controlled
                 steering = self.yaw_controller.get_steering( target_velocity, angular_velocity, current_velocity)

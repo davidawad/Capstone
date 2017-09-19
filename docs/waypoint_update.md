@@ -76,7 +76,28 @@ So the following is the value table for cruise speed of car
 
 
 ## Udacity Data Inconsistence
-Yaw unit for waypoint_loader.py in 
-Simultor: degree
-Carla: radian
-waypoint_loader.py load simulator waypoint yaw data from 'data/wp_yaw_const.txt'.  From the value range of data, it looks like the unit is degree.  But the 'churchlot_with_cars.csv' for Carla is obvious in radian.  We should check this again before submit.
+ 
+
+ * Yaw unit for waypoint_loader.py in
+
+ 
+  Simultor: degree
+    
+
+   Carla: radian
+
+   
+
+   waypoint_loader.py load simulator waypoint yaw data from 'data/wp_yaw_const.txt'.  From the value range of data, 
+it looks like the unit is degree.  But the 'churchlot_with_cars.csv' for Carla is obvious in radian.  
+We should check this again before submit.
+ 
+ 
+
+
+ * Steer Ratio in Simulator 
+ 
+
+   The steer ratio value for simulator(2.67) is too small.  Currently we multiply it by 8 in order 
+to get good value from yaw_controller.  But the value in Carla is 14.8, which might be wrong to multiply it by 8.
+
