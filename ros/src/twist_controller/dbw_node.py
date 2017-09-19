@@ -92,13 +92,13 @@ class DBWNode(object):
             if (self.twist_cmd is not None) and (self.velocity is not None) and self.dbw_enabled and self.final_wps:
 
                 # Knowns necassary for calculations
-                linear_velocity = self.twist_cmd.linear.x
+                target_velocity = self.twist_cmd.linear.x
                 angular_velocity = self.twist_cmd.angular.z
                 current_velocity = self.velocity.linear.x
-                target_velocity = self.final_wps[0].twist.twist.linear.x
+                linear_velocity = self.final_wps[0].twist.twist.linear.x
 
                 # Call Controllers to calculate and return variables to be controlled
-                steering = self.yaw_controller.get_steering( linear_velocity, angular_velocity, current_velocity)
+                steering = self.yaw_controller.get_steering( target_velocity, angular_velocity, current_velocity)
                 throttle, brake = self.twist_controller.control(current_velocity, target_velocity)
 
                 # Publish Control Variables
