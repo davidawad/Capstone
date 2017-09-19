@@ -60,7 +60,7 @@ class DBWNode(object):
         # TODO: Create `TwistController` object
         # self.controller = TwistController(<Arguments you wish to provide>)
         min_speed = 0  # TBD 
-        self.yaw_controller = YawController(wheel_base, steer_ratio * 8, min_speed, max_lat_accel, max_steer_angle)
+        self.yaw_controller = YawController(wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle)
 
         # TODO: Subscribe to all the topics you need to
     	rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cmd_cb) 
