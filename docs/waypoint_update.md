@@ -1,7 +1,7 @@
 # Waypoint Updater
 
 ## Smooth Deceleration
-The decelleartion speed is calculated by spline function, as defined in python scipy library.
+The deceleration speed is calculated by spline function, as defined in python scipy library.
 ```
 from scipy import interpolate 
 ...
