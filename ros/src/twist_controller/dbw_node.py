@@ -85,10 +85,10 @@ class DBWNode(object):
                 angular_velocity = self.twist_cmd.angular.z
                 current_velocity = self.velocity.linear.x
                 steering = self.yaw_controller.get_steering( linear_velocity, angular_velocity, current_velocity)
+                vel_diff = current_velocity - linear_velocity
                 if ( current_velocity > linear_velocity):
                     throttle = 0
-                    vel_diff = current_velocity - linear_velocity
-                    if vel_diff > 5:
+                    if vel_diff > 5 or (linear_velocity < 0.5):
                         brake = 20000
                     elif vel_diff > 1.5:
                         brake = 10000
@@ -96,7 +96,10 @@ class DBWNode(object):
                         brake = 0
 
                 else:
-                    throttle = 0.5
+                    if ( vel_diff < -5):
+                        throttle = 1.5
+                    else:
+                        throttle = 0.8
                     brake = 0
 
             	self.publish(throttle, brake, steering)

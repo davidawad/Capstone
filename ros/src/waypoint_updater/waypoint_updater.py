@@ -25,7 +25,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-
+MAX_BRAKE_DISTANCE = 60 # distance to start brake 
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -50,16 +50,18 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
+        self.published = False
         self.loop()
 
     def loop(self):
-        rate = rospy.Rate(0.5) # 1Hz
+        rate = rospy.Rate(0.5) # 0.5Hz
         while not rospy.is_shutdown():
 
-            if (self.pose is not None) and (self.waypoints is not None):
+            if (self.pose is not None) and (self.waypoints is not None) and not self.published:
                 self.update_final_waypoints()
                 self.publish_final_waypoints()
 
+            self.published = False
             rate.sleep()
         rospy.spin()
 
@@ -80,6 +82,12 @@ class WaypointUpdater(object):
         self.traffic_waypoint = msg.data
         if self.traffic_waypoint != -1:
             rospy.loginfo("traffic_waypoint: %s", msg)
+
+        if (self.state == 1) and (self.traffic_waypoint == -1):
+            if (self.pose is not None) and (self.waypoints is not None):
+                self.update_final_waypoints()
+                self.publish_final_waypoints()
+                self.published = True
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -143,8 +151,11 @@ class WaypointUpdater(object):
         stop_distance = self.wp_distance(waypoints, 0, stop_index)
         # estimate distance per waypoint
         s0 = self.wp_distance(waypoints, 0, 1)
+        if stop_distance > MAX_BRAKE_DISTANCE:
+            x = np.array([  0, stop_distance-MAX_BRAKE_DISTANCE, stop_distance, stop_distance+s0, stop_distance+s0*2])
+        else:
+            x = np.array([-s0, 0, stop_distance, stop_distance+s0, stop_distance+s0*2])
 
-        x = np.array([-s0, 0, stop_distance, stop_distance+s0, stop_distance+s0*2])
         y = np.array([start_velocity, start_velocity, 0, 0, 0])
         tck = interpolate.splrep(x, y, s=0)
         xnew = 0
