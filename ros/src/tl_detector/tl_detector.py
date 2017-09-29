@@ -70,8 +70,8 @@ class TLDetector(object):
                     + (light_pos.z - wp_pos.z)**2
                 )
                 distances.append((i, distance))
-            distances.sort(key=lambda d: d[1])
-            waypoint_indices = map(lambda d: d[0], distances)
+            distances.sort(key=lambda e: e[1])
+            waypoint_indices = map(lambda e: e[0], distances)
             self.light_waypoints.append(waypoint_indices)
         self.light_indexed = True
 
@@ -141,21 +141,30 @@ class TLDetector(object):
             self.pose.pose.orientation.w,
         ]))
         init_dir = np.array([1.0, 0., 0., 0.])
-        ego_dir = np.matmul(init_dir, rot)[:3]
-        min_dist = float('inf')
+        ego_dir = np.matmul(rot, init_dir)[:3]
+        # normalized
+        ego_dir = ego_dir / np.linalg.norm(ego_dir)
+        min_dist = 100
         light_index = None
-
+        candidates = []
         for i, light in enumerate(self.lights):
             light_pos = np.array([
                 light.pose.pose.position.x, 
                 light.pose.pose.position.y, 
                 light.pose.pose.position.z])
             light_dir = light_pos - ego_pos
-            if np.dot(ego_dir, light_dir) > 0:
-                distance = np.linalg.norm(ego_pos - light_pos)
-                if distance < min_dist:
-                    light_index = i
-                    min_dist = distance
+            # normalized
+            light_dir = light_dir / np.linalg.norm(light_dir)
+            # angle between light_dir & ego_dir
+            cos_theta = np.dot(ego_dir, light_dir)
+            distance = np.linalg.norm(ego_pos - light_pos)
+            if distance < min_dist:
+                candidates.append((i, cos_theta))
+        
+        if candidates:
+            # chose the smallest angle
+            candidates.sort(key=lambda e: e[1])
+            light_index = candidates[0][0]
 
         return light_index
 
@@ -178,6 +187,8 @@ class TLDetector(object):
 
         # get transform between pose of camera and world frame
         trans = None
+        rot = None
+
         try:
             now = rospy.Time.now()
             self.listener.waitForTransform("/base_link",
@@ -192,6 +203,29 @@ class TLDetector(object):
 
         x = 0
         y = 0
+        cx = image_width * 0.5
+        cy = image_height * 0.5
+
+        if trans is None or rot is None:
+            return (x, y)
+
+        camera_mat = self.listener.fromTranslationRotation(trans, rot)
+        # use homogenous coordinate
+        point_in_world = np.array([point_in_world.x, point_in_world.y, point_in_world.z, 1.0])
+        point_in_camera = np.matmul(camera_mat, point_in_world)
+        xc, yc, zc, _ = point_in_camera
+        # print('pw: {},{},{}'.format(point_in_world[0],point_in_world[1],point_in_world[2]))
+        # print('pc: {},{},{}'.format(xc,yc,zc))
+
+        # Convert to image co-ordinates using image params
+        if fx < 10.0:
+            fx = 2744
+            fy = 2944
+
+        x = int(- fx * xc / zc + cx)
+        y = int(- fy * yc / zc + cy)
+
+        # print ('light ({},{})'.format(x,y))
 
         return (x, y)
 
@@ -212,6 +246,8 @@ class TLDetector(object):
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
 
         x, y = self.project_to_image_plane(light.pose.pose.position)
+
+
 
         #TODO use light location to zoom in on traffic light in image
 
