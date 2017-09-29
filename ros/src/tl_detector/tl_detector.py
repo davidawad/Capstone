@@ -129,29 +129,32 @@ class TLDetector(object):
 
         """
         #TODO implement
+
         ego_pos = np.array([
             self.pose.pose.position.x,
-            self.pose.pose.position.y,
-            self.pose.pose.position.z
+            self.pose.pose.position.y
         ])
-        rot = tf.transformations.quaternion_matrix(np.array([
+
+        rot_quat = np.array([
             self.pose.pose.orientation.x,
             self.pose.pose.orientation.y,
             self.pose.pose.orientation.z,
-            self.pose.pose.orientation.w,
-        ]))
+            self.pose.pose.orientation.w,            
+        ])
+
+        rot = tf.transformations.quaternion_matrix(rot_quat)
         init_dir = np.array([1.0, 0., 0., 0.])
-        ego_dir = np.matmul(rot, init_dir)[:3]
+        ego_dir = np.matmul(rot, init_dir)[:2]
         # normalized
         ego_dir = ego_dir / np.linalg.norm(ego_dir)
-        min_dist = 100
+        min_dist = 50
         light_index = None
         candidates = []
         for i, light in enumerate(self.lights):
             light_pos = np.array([
                 light.pose.pose.position.x, 
-                light.pose.pose.position.y, 
-                light.pose.pose.position.z])
+                light.pose.pose.position.y])
+
             light_dir = light_pos - ego_pos
             # normalized
             light_dir = light_dir / np.linalg.norm(light_dir)
@@ -164,7 +167,9 @@ class TLDetector(object):
         if candidates:
             # chose the smallest angle
             candidates.sort(key=lambda e: e[1])
-            light_index = candidates[0][0]
+            
+            if candidates[0][1] > 0.:
+                light_index = candidates[0][0]
 
         return light_index
 
@@ -219,13 +224,16 @@ class TLDetector(object):
 
         # Convert to image co-ordinates using image params
         if fx < 10.0:
-            fx = 2744
-            fy = 2944
+            fx = 2574
+            fy = 2744
+            zc -= 1.0
+            cx = image_width * 0.5 + 70
+            cy = image_height + 50
 
-        x = int(- fx * xc / zc + cx)
-        y = int(- fy * yc / zc + cy)
+        x = int(- fx * yc / xc + cx)
+        y = int(- fy * zc / xc + cy)
 
-        # print ('light ({},{})'.format(x,y))
+        print('light ({},{})'.format(x,y))
 
         return (x, y)
 
@@ -247,12 +255,14 @@ class TLDetector(object):
 
         x, y = self.project_to_image_plane(light.pose.pose.position)
 
-
-
+        
         #TODO use light location to zoom in on traffic light in image
 
+        # TODO classifier
         #Get classification
         # return self.light_classifier.get_classification(cv_image)
+
+        # use the simulator state for test and training
         return light.state
 
     def get_light_wp(self, light_index):
@@ -274,7 +284,7 @@ class TLDetector(object):
         if(self.pose):
             light_index = self.get_closest_light(self.pose.pose)
 
-        if light_index is not None:
+        if light_index is not None and self.light_indexed:
             light = self.lights[light_index]
             light_wp = self.get_light_wp(light_index)
             state = self.get_light_state(light)
