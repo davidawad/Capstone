@@ -6,6 +6,7 @@ from dbw_mkz_msgs.msg import ThrottleCmd, SteeringCmd, BrakeCmd, SteeringReport
 from geometry_msgs.msg import TwistStamped, PoseStamped
 from styx_msgs.msg import Lane
 import math
+import tf
 
 from yaw_controller import YawController
 from twist_controller import Controller
@@ -67,7 +68,7 @@ class DBWNode(object):
         
         # Controllers
         self.yaw_controller = YawController(wheel_base, steer_ratio * 8, MIN_SPEED, max_lat_accel, max_steer_angle)
-        self.twist_controller = Controller(vehicle_mass, wheel_radius, decel_limit, accel_limit)
+        self.twist_controller = Controller(vehicle_mass, wheel_radius, decel_limit, accel_limit, max_steer_angle)
 
         # Subscribe to Topics
     	rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cmd_cb, queue_size = 1) 
@@ -93,21 +94,38 @@ class DBWNode(object):
             if (self.twist_cmd is not None) and (self.velocity is not None) and self.dbw_enabled and self.final_wps:
 
                 # Knowns necassary for calculations
+
+                # Known velocities
                 target_velocity = self.twist_cmd.linear.x
                 angular_velocity = self.twist_cmd.angular.z
                 current_velocity = self.velocity.linear.x
-                #linear_velocity = self.final_wps[0].twist.twist.linear.x
+                
+                # Known yaw angles 
+                #_, _, current_yaw = tf.transformations.euler_from_quaternion([self.pose.orientation.x, 
+                #                                                              self.pose.orientation.y, 
+                #                                                              self.pose.orientation.z, 
+                #                                                              self.pose.orientation.w])
+
+                #_, _, target_yaw = tf.transformations.euler_from_quaternion([self.final_wps[0].pose.pose.orientation.x, 
+                #                                                             self.final_wps[0].pose.pose.orientation.y, 
+                #                                                             self.final_wps[0].pose.pose.orientation.z, 
+                #                                                             self.final_wps[0].pose.pose.orientation.w])                  
+
+                cte = angular_velocity
 
                 # Call Controllers to calculate and return variables to be controlled
-                steering = self.yaw_controller.get_steering( target_velocity, angular_velocity, current_velocity)
-                throttle, brake = self.twist_controller.control(current_velocity, target_velocity)
+                steering_yaw = self.yaw_controller.get_steering( target_velocity, angular_velocity, current_velocity)
+                throttle, brake, steering_pid = self.twist_controller.control(current_velocity, target_velocity, cte, self.dbw_enabled)
+
+                steering = steering_pid
+
 
                 # Publish Control Variables
-            	self.publish(throttle, brake, steering)
+            	self.publish(throttle, brake, cte, target_velocity)
 
             rate.sleep()
 
-    def publish(self, throttle, brake, steer):
+    def publish(self, throttle, brake, steer, target_velocity):
         
         self.count += 1
 
@@ -128,7 +146,7 @@ class DBWNode(object):
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
 
-        rospy.loginfo('publish dbw %s %s %s, %s', throttle, brake, steer, self.count)
+        rospy.loginfo('Throttle: %s Brake: %s Steer: %s, Target_v: %s, Count: %s', throttle, brake, steer, target_velocity, self.count)
 
     def dbw_enabled_cb(self, msg):
         self.dbw_enabled = msg.data
