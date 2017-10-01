@@ -18,7 +18,13 @@ class Controller(object):
         self.steering = pid.PID(kp = 5, ki = 0.0001, kd = .75, mn = -self.steering_tol, mx = self.steering_tol)
 
     def control(self, current_velocity, target_velocity, cte, dbw_enabled):
+    	"""
+		Uses input parameters with PID to calculate controll variables
 
+    	INPUT : current_velocity, target_velcotiy, cte, dbw_enables
+
+    	OUTPUT: throttle, brake, steering
+    	"""
     	if dbw_enabled is False:
     		self.steering.reset()
 
@@ -43,10 +49,12 @@ class Controller(object):
         	brake = torque
 
 
+        # Get Time difference
         curr_time = rospy.get_time()
         del_time = curr_time - self.start_time
         self.start_time = curr_time
 
+        # In case del_time is zero
         if(del_time == 0):
         	del_time += 0.01
 

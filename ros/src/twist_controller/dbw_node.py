@@ -82,15 +82,16 @@ class DBWNode(object):
         self.loop()
 
     def loop(self):
+        """
+        Uses Target Velocites (linear and angualr) and Current Velocities to output steering, throttle and brake values
+
+        Input:
+            None, uses member values
+        Output:
+            None, sends info through member function
+        """
         rate = rospy.Rate(10) 
         while not rospy.is_shutdown():
-            # TODO: Get predicted throttle, brake, and steering using `twist_controller`
-            # You should only publish the control commands if dbw is enabled
-            # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
-            #                                                     <proposed angular velocity>,
-            #                                                     <current linear velocity>,
-            #                                                     <dbw status>,
-            #                                                     <any other argument you need>)
             if (self.twist_cmd is not None) and (self.velocity is not None) and self.dbw_enabled and self.final_wps:
 
                 # Knowns necassary for calculations
@@ -100,23 +101,14 @@ class DBWNode(object):
                 angular_velocity = self.twist_cmd.angular.z
                 current_velocity = self.velocity.linear.x
                 
-                # Known yaw angles 
-                #_, _, current_yaw = tf.transformations.euler_from_quaternion([self.pose.orientation.x, 
-                #                                                              self.pose.orientation.y, 
-                #                                                              self.pose.orientation.z, 
-                #                                                              self.pose.orientation.w])
-
-                #_, _, target_yaw = tf.transformations.euler_from_quaternion([self.final_wps[0].pose.pose.orientation.x, 
-                #                                                             self.final_wps[0].pose.pose.orientation.y, 
-                #                                                             self.final_wps[0].pose.pose.orientation.z, 
-                #                                                             self.final_wps[0].pose.pose.orientation.w])                  
-
+                # Use angualr velocity as the goal
                 cte = angular_velocity
 
                 # Call Controllers to calculate and return variables to be controlled
                 steering_yaw = self.yaw_controller.get_steering( target_velocity, angular_velocity, current_velocity)
                 throttle, brake, steering_pid = self.twist_controller.control(current_velocity, target_velocity, cte, self.dbw_enabled)
 
+                # Use either yaw or pid steering.
                 steering = steering_pid
 
 
@@ -126,6 +118,15 @@ class DBWNode(object):
             rate.sleep()
 
     def publish(self, throttle, brake, steer, target_velocity):
+        """
+        Takes control values from loop() and publishes to the appropriate topics
+
+        Input:
+            throttle, brake, steer, target_velocity
+
+        Output:
+            None, Publishes values to Topics
+        """
         
         self.count += 1
 
@@ -146,6 +147,7 @@ class DBWNode(object):
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
 
+        # Print Values in rqt_console for debugging
         rospy.loginfo('Throttle: %s Brake: %s Steer: %s, Target_v: %s, Count: %s', throttle, brake, steer, target_velocity, self.count)
 
     def dbw_enabled_cb(self, msg):
