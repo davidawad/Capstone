@@ -81,23 +81,25 @@ So the following is the value table for cruise speed of car
  * Yaw unit for waypoint_loader.py in
 
  
-  Simultor: degree
+  Simulator: degree
     
 
    Carla: radian
 
    
 
-   waypoint_loader.py load simulator waypoint yaw data from 'data/wp_yaw_const.txt'.  From the value range of data, 
+   ~~waypoint_loader.py load simulator waypoint yaw data from 'data/wp_yaw_const.txt'.  From the value range of data, 
 it looks like the unit is degree.  But the 'churchlot_with_cars.csv' for Carla is obvious in radian.  
 We should check this again before submit.
  
- 
+ ~~
+   The problem is solved by recent repo.  Now the data is in 'data/wp_yaw_const.csv'.
 
 
  * Steer Ratio in Simulator 
  
 
-   The steer ratio value for simulator(2.67) is too small.  Currently we multiply it by 8 in order 
+   ~~The steer ratio value for simulator(2.67) is too small.  Currently we multiply it by 8 in order 
 to get good value from yaw_controller.  But the value in Carla is 14.8, which might be wrong to multiply it by 8.
-
+~~
+   The problem is solved for recent repo.

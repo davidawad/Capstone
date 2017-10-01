@@ -83,7 +83,8 @@ class WaypointUpdater(object):
         if self.traffic_waypoint != -1:
             rospy.loginfo("traffic_waypoint: %s", msg)
 
-        if (self.state == 1) and (self.traffic_waypoint == -1):
+        if ((self.state == 1) and (self.traffic_waypoint == -1)) or \
+           ((self.state == 0) and (self.traffic_waypoint != -1)):
             if (self.pose is not None) and (self.waypoints is not None):
                 self.update_final_waypoints()
                 self.publish_final_waypoints()
