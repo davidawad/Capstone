@@ -256,7 +256,7 @@ class TLDetector(object):
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
         h, w, c = cv_image.shape
-        size = 0.8
+        size = 1
 
         rot_quat = np.array([
             self.pose.pose.orientation.x,
@@ -275,30 +275,15 @@ class TLDetector(object):
         left = left / np.linalg.norm(left)
         right = -left
         light_center = [light.pose.pose.position.x, light.pose.pose.position.y, light.pose.pose.position.z]
-        north = light_center + size * up
-        south = light_center + size * down
-        tl = north + left * size
-        br = south + right * size
+        top_left = light_center + size * up + size * left
+        bottom_right = light_center + size * down + size * right
 
-        points = self.project_to_image_plane(tl, br)
-        tl = points[0]
-        br = points[1]
+        tl, br = self.project_to_image_plane(top_left, bottom_right)
         if 0 < tl[0] < w or 0 < br[1] < h:
             # cv2.circle(cv_image, (x,y), 5, (0,255,0), 3)
             cv2.rectangle(cv_image, tl, br, (0, 255, 0), 2)
             debug_img = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
             self.debug_img_pub.publish(debug_img)
-
-
-        # x, y = self.project_to_image_plane(light.pose.pose.position)[0]
-        # tl = (x - size, y - size)
-        # br = (x + size, y + size)
-        # if 0 < tl[0] < w and 0 < tl[1] < h and 0 < br[0] < w and 0 < br[1] < h:
-        #     cv2.circle(cv_image, (x,y), 5, (0,255,0), 3)
-        #     # cv2.rectangle(cv_image, tl, br, (0, 255, 0), 2)
-        #     debug_img = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
-        #     self.debug_img_pub.publish(debug_img)
-
 
         #TODO use light location to zoom in on traffic light in image
 
