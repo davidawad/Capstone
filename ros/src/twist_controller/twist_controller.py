@@ -15,7 +15,7 @@ class Controller(object):
         self.throttle_limit = 0.9
         self.start_time = rospy.get_time()
         self.steering_tol = max_steer_angle
-        self.steering = pid.PID(kp = 5.5, ki = 0.2, kd = .9, mn = -self.steering_tol, mx = self.steering_tol)
+        self.steering = pid.PID(kp = 5, ki = 0.0001, kd = .75, mn = -self.steering_tol, mx = self.steering_tol)
 
     def control(self, current_velocity, target_velocity, cte, dbw_enabled):
 

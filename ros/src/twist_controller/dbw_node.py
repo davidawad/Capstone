@@ -67,7 +67,7 @@ class DBWNode(object):
         
         
         # Controllers
-        self.yaw_controller = YawController(wheel_base, steer_ratio * 8, MIN_SPEED, max_lat_accel, max_steer_angle)
+        self.yaw_controller = YawController(wheel_base, steer_ratio * 14.8, MIN_SPEED, max_lat_accel, max_steer_angle)
         self.twist_controller = Controller(vehicle_mass, wheel_radius, decel_limit, accel_limit, max_steer_angle)
 
         # Subscribe to Topics
@@ -121,7 +121,7 @@ class DBWNode(object):
 
 
                 # Publish Control Variables
-            	self.publish(throttle, brake, cte, target_velocity)
+            	self.publish(throttle, brake, steering, target_velocity)
 
             rate.sleep()
 
