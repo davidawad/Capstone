@@ -5,3 +5,5 @@ build
 devel
 
 profile.tmp
+
+tl_detector_sim_train/

@@ -11,8 +11,20 @@ import tf
 import cv2
 import yaml
 import numpy as np
+import os
+from time import strftime
 
 STATE_COUNT_THRESHOLD = 3
+
+def generate_training_data(img, state):
+    dst_folder = '../../../tl_detector_sim_train'
+    if not os.path.isdir(dst_folder):
+        os.makedirs(dst_folder)
+    
+    time = strftime("%Y%m%d_%H%M%S")
+    res = cv2.resize(img, (64, 64) ,interpolation=cv2.INTER_CUBIC)
+    filename = '{}/{}_state_{}.jpg'.format(dst_folder, time, state)
+    cv2.imwrite(filename, res)
 
 class TLDetector(object):
     def __init__(self):
@@ -53,8 +65,9 @@ class TLDetector(object):
         self.light_waypoints = []
         self.light_indexed = False
 
-        self.debug_img_pub = rospy.Publisher('/debug_img',
-            Image, queue_size=1)
+        if self.config['debug_img']:
+            self.debug_img_pub = rospy.Publisher('/debug_img', Image, 
+                queue_size=1)
 
         rospy.spin()
 
@@ -146,8 +159,7 @@ class TLDetector(object):
         ego_dir = np.matmul(rot, init_dir)[:2]
         # normalized
         ego_dir = ego_dir / np.linalg.norm(ego_dir)
-        min_dist = 50
-        light_index = None
+        min_dist = 100
         candidates = []
         for i, light in enumerate(self.lights):
             light_pos = np.array([
@@ -161,16 +173,18 @@ class TLDetector(object):
             cos_theta = np.dot(ego_dir, light_dir)
             distance = np.linalg.norm(ego_pos - light_pos)
             if distance < min_dist:
-                candidates.append((i, cos_theta))
+                candidates.append((i, cos_theta, distance))
 
         if candidates:
             # chose the smallest angle
             candidates.sort(key=lambda e: e[1])
-
-            if candidates[0][1] > 0.:
-                light_index = candidates[0][0]
-
-        return light_index
+            
+            index, cos_theta, distance = candidates[0]
+            # distance has be greater than 15 in case the light is too close
+            if cos_theta > 0. and distance > 15:
+                return index
+        else:
+            return -1
 
     def project_to_image_plane(self, *points):
         """Project points from 3D world coordinates to 2D camera image location
@@ -203,15 +217,13 @@ class TLDetector(object):
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
 
-        #TODO Use tranform and rotation to calculate 2D position of light in image
-
         x = 0
         y = 0
         cx = image_width * 0.5
         cy = image_height * 0.5
 
         if trans is None or rot is None:
-            return (x, y)
+            return [(x, y) for _ in points ]
 
         camera_mat = self.listener.fromTranslationRotation(trans, rot)
 
@@ -256,14 +268,14 @@ class TLDetector(object):
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
         h, w, c = cv_image.shape
-        size = 1
 
-        rot_quat = np.array([
+        size = 1
+        rot_quat = [
             self.pose.pose.orientation.x,
             self.pose.pose.orientation.y,
             self.pose.pose.orientation.z,
             self.pose.pose.orientation.w,
-        ])
+        ]
         rot = tf.transformations.quaternion_matrix(rot_quat)
         init_dir = np.array([1.0, 0., 0., 0.])
         ego_dir = np.matmul(rot, init_dir)[:3]
@@ -279,20 +291,28 @@ class TLDetector(object):
         bottom_right = light_center + size * down + size * right
 
         tl, br = self.project_to_image_plane(top_left, bottom_right)
-        if 0 < tl[0] < w or 0 < br[1] < h:
-            # cv2.circle(cv_image, (x,y), 5, (0,255,0), 3)
-            cv2.rectangle(cv_image, tl, br, (0, 255, 0), 2)
-            debug_img = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
-            self.debug_img_pub.publish(debug_img)
+        if tl[0] < w and tl[1] < h and br[0] > 0 and br[1] > 0:
+            if self.config['debug_img']:
+                cv2.rectangle(cv_image, tl, br, (0, 255, 0), 2)
+                debug_img = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
+                self.debug_img_pub.publish(debug_img)
 
         #TODO use light location to zoom in on traffic light in image
+        roi = cv_image[tl[1]:br[1], tl[0]:br[0]]
+        roi_w, roi_h, _ = roi.shape
+        if self.config['generate_train'] and roi_w > 0 and roi_h > 0:
+            light_state = light.state
+            generate_training_data(roi, light_state)
+            return light_state
+        else:
+            # TODO classifier
+            #Get classification
+            # return self.light_classifier.get_classification(cv_image)
 
-        # TODO classifier
-        #Get classification
-        # return self.light_classifier.get_classification(cv_image)
+            # use the simulator state for test and training
+            return light.state
 
-        # use the simulator state for test and training
-        return light.state
+
 
     def get_light_wp(self, light_index):
         way_points = self.light_waypoints[light_index]
@@ -313,14 +333,20 @@ class TLDetector(object):
         if(self.pose):
             light_index = self.get_closest_light(self.pose.pose)
 
-        if light_index is not None and self.light_indexed:
-            light = self.lights[light_index]
-            # print('light orientation: {}'.format(light.pose.pose.orientation))
-            light_wp = self.get_light_wp(light_index)
-            state = self.get_light_state(light)
-            return light_wp, state
+        if light_index > -1:
+            if self.light_indexed:
+                light = self.lights[light_index]
+                light_wp = self.get_light_wp(light_index)
+                state = self.get_light_state(light)
+                return light_wp, state
+            else:
+                return -1, TrafficLight.UNKNOWN
+        else:
+            if light_index == -1:
+                if self.config['generate_train']:
+                    pass
 
-        return -1, TrafficLight.UNKNOWN
+            return -1, TrafficLight.UNKNOWN
 
 if __name__ == '__main__':
     try:
