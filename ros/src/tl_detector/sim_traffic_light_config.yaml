@@ -14,3 +14,4 @@ stop_line_positions:
     - [351.84, 1574.65]
 debug_img: true
 generate_train: false
+samples_folder: '../../../tl_detector_sim_train'
