@@ -352,38 +352,6 @@ class TLDetector(object):
 
             return -1, TrafficLight.UNKNOWN
 
-    def test_notify_redlight_cb(self, msg):
-        # publish redlight at current car location
-        # find the light position
-
-        # rospy.loginfo('test_notify_redlight_cb')
-        if ( msg.data == 0):
-            self.upcoming_red_light_pub.publish(Int32(-1))
-            return
-            
-        closest_len = 1e6
-        closest_index = 0
-        light_positions = self.config['stop_line_positions']
-        cx = self.pose.pose.position.x
-        cy = self.pose.pose.position.y
-        for i in range(len(light_positions)):
-            x = light_positions[i][0]
-            y = light_positions[i][1]
-            d = ((x-cx)**2 + (y-cy)**2)
-            if d < closest_len:
-                closest_len = d
-                closest_index = i
-
-        # rospy.loginfo('closest light pole:%s', closest_index)
-
-        pos1 = PoseStamped()
-        pos1.pose.position.x = light_positions[closest_index][0]
-        pos1.pose.position.y = light_positions[closest_index][1]
-        pos1.pose.position.z = 0
-        light_wp = self.get_closest_waypoint(pos1.pose)
-        self.upcoming_red_light_pub.publish(Int32(light_wp))
-        # rospy.loginfo('light_wp:%s', light_wp)
-
 if __name__ == '__main__':
     try:
         TLDetector()
