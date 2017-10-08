@@ -182,8 +182,8 @@ class TLDetector(object):
             candidates.sort(key=lambda e: e[1])
             
             index, cos_theta, distance = candidates[0]
-            # distance has be greater than 15 in case the light is too close
-            if cos_theta > 0. and distance > 15:
+            
+            if cos_theta > 0:
                 return index
         else:
             return -1
