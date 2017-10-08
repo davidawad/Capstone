@@ -5,3 +5,6 @@ camera_info:
   image_height: 600
 light_positions:
     - [20.991, 22.837]
+debug_img: true
+generate_train: false
+samples_folder: '../../../tl_detector_site_train'

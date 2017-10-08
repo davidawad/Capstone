@@ -16,8 +16,7 @@ from time import strftime
 
 STATE_COUNT_THRESHOLD = 3
 
-def generate_training_data(img, state):
-    dst_folder = '../../../tl_detector_sim_train'
+def generate_training_data(dst_folder, img, state):
     if not os.path.isdir(dst_folder):
         os.makedirs(dst_folder)
     
@@ -302,7 +301,9 @@ class TLDetector(object):
         roi_w, roi_h, _ = roi.shape
         if self.config['generate_train'] and roi_w > 0 and roi_h > 0:
             light_state = light.state
-            generate_training_data(roi, light_state)
+
+            dst_folder = self.config['samples_folder']
+            generate_training_data(dst_folder, roi, light_state)
             return light_state
         else:
             # TODO classifier
