@@ -12,10 +12,10 @@ class Controller(object):
         self.decel_limit = decel_limit
         self.accel_limit = accel_limit
         self.wheel_radius = wheel_radius
-        self.throttle_limit = 0.9
+        self.throttle_limit = 0.975
         self.start_time = rospy.get_time()
         self.steering_tol = max_steer_angle
-        self.steering = pid.PID(kp = 5, ki = 0.0001, kd = .75, mn = -self.steering_tol, mx = self.steering_tol)
+        self.steering = pid.PID(kp = 5.25, ki = 0.0001, kd = 1.0, mn = -self.steering_tol, mx = self.steering_tol)
 
     def control(self, current_velocity, target_velocity, cte, dbw_enabled):
     	"""
@@ -28,8 +28,8 @@ class Controller(object):
     	if dbw_enabled is False:
     		self.steering.reset()
 
-    	# Convert to MPH
-    	target_velocity = ONE_MPH * target_velocity
+		# Set Target
+    	#target_velocity = target_velocity * ONE_MPH
 
     	# Braking Torque 
         force = self.vehicle_mass * self.decel_limit
