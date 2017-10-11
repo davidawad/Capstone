@@ -16,6 +16,9 @@ from time import strftime
 
 STATE_COUNT_THRESHOLD = 3
 
+def clamp(n, smallest, largest): 
+    return max(smallest, min(n, largest))
+
 def generate_training_data(dst_folder, img, state):
     if not os.path.isdir(dst_folder):
         os.makedirs(dst_folder)
@@ -33,6 +36,17 @@ class TLDetector(object):
         self.waypoints = []
         self.camera_image = None
         self.lights = []
+
+        self.state = TrafficLight.UNKNOWN
+        self.last_state = TrafficLight.UNKNOWN
+        self.last_wp = -1
+        self.state_count = 0
+        self.light_waypoints = []
+        self.light_indexed = False
+
+        self.bridge = CvBridge()
+        self.light_classifier = TLClassifier()
+        self.listener = tf.TransformListener()
 
         self.pose_sub = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         self.base_wp_sub = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -52,17 +66,11 @@ class TLDetector(object):
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
-        self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
-        self.listener = tf.TransformListener()
 
-        self.state = TrafficLight.UNKNOWN
-        self.last_state = TrafficLight.UNKNOWN
-        self.last_wp = -1
-        self.state_count = 0
 
-        self.light_waypoints = []
-        self.light_indexed = False
+
+
+
 
         if self.config['debug_img']:
             self.debug_img_pub = rospy.Publisher('/debug_img', Image, 
@@ -269,7 +277,7 @@ class TLDetector(object):
             return False
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-        h, w, c = cv_image.shape
+        h, w, _ = cv_image.shape
 
         size = 1
         rot_quat = [
@@ -293,29 +301,35 @@ class TLDetector(object):
         bottom_right = light_center + size * down + size * right
 
         tl, br = self.project_to_image_plane(top_left, bottom_right)
+
         if tl[0] < w and tl[1] < h and br[0] > 0 and br[1] > 0:
+            tl = (clamp(tl[0], 0, w), clamp(tl[1], 0, h))
+            br = (clamp(br[0], 0, w), clamp(br[1], 0, h))
+            
             if self.config['debug_img']:
                 cv2.rectangle(cv_image, tl, br, (0, 255, 0), 2)
                 debug_img = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
                 self.debug_img_pub.publish(debug_img)
 
-        #TODO use light location to zoom in on traffic light in image
-        roi = cv_image[tl[1]:br[1], tl[0]:br[0]]
-        roi_w, roi_h, _ = roi.shape
-        if self.config['generate_train'] and roi_w > 0 and roi_h > 0:
-            light_state = light.state
+            #TODO use light location to zoom in on traffic light in image
+            roi = cv_image[tl[1]:br[1], tl[0]:br[0]]
+            roi_h, roi_w, _ = roi.shape
+            if roi_w > 0 and roi_h > 0:
+                if self.config['generate_train']:
+                    light_state = light.state
 
-            dst_folder = self.config['samples_folder']
-            generate_training_data(dst_folder, roi, light_state)
-            return light_state
-        else:
-            # TODO classifier
-            #Get classification
-            # return self.light_classifier.get_classification(cv_image)
+                    dst_folder = self.config['samples_folder']
+                    generate_training_data(dst_folder, roi, light_state)
+                    return light_state
+                else:
+                    test = cv2.resize(roi, (64, 64) ,interpolation=cv2.INTER_CUBIC)
+                    # TODO classifier
+                    #Get classification
+                    tl_state = self.light_classifier.get_classification(test)
+                    print ('tl state: {}'.format(tl_state))
+                    return tl_state
 
-            # use the simulator state for test and training
-            return light.state
-
+        return TrafficLight.UNKNOWN
 
 
     def get_light_wp(self, light_index):
