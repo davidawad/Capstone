@@ -75,7 +75,7 @@ class DBWNode(object):
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb, queue_size = 1)
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size = 1)
         rospy.Subscriber('current_velocity', TwistStamped, self.velocity_cb, queue_size = 1)
-        rospy.Subscriber('/final_waypoints',Lane, self.final_wp, queue_size = 1)
+        #rospy.Subscriber('/final_waypoints',Lane, self.final_wp, queue_size = 1)
 
 
 
@@ -92,7 +92,7 @@ class DBWNode(object):
         """
         rate = rospy.Rate(10) 
         while not rospy.is_shutdown():
-            if (self.twist_cmd is not None) and (self.velocity is not None) and self.dbw_enabled and self.final_wps:
+            if (self.twist_cmd is not None) and (self.velocity is not None) and self.dbw_enabled:
 
                 # Knowns necassary for calculations
 
@@ -162,6 +162,7 @@ class DBWNode(object):
     def velocity_cb(self, msg): # geometry_msgs/TwistStamped
         self.velocity = msg.twist
     
+    # Obsolete
     def final_wp(self, msg):
         self.final_wps = msg.waypoints
 
