@@ -76,6 +76,9 @@ class TLDetector(object):
             self.debug_img_pub = rospy.Publisher('/debug_img', Image, 
                 queue_size=1)
 
+        self.light_waypoints = []
+        self.light_indexed = False
+
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -334,7 +337,6 @@ class TLDetector(object):
 
     def get_light_wp(self, light_index):
         way_points = self.light_waypoints[light_index]
-
         return way_points[0]
 
     def process_traffic_lights(self):
