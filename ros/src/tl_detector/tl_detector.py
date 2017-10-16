@@ -329,7 +329,6 @@ class TLDetector(object):
                     # TODO classifier
                     #Get classification
                     tl_state = self.light_classifier.get_classification(test)
-                    print ('tl state: {}'.format(tl_state))
                     return tl_state
 
         return TrafficLight.UNKNOWN
