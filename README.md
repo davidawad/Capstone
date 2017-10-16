@@ -26,7 +26,7 @@ The waypoint_updater finds next waypoints from the closest waypoint based on the
 If the `traffic_waypoint` is published, `waypoint_updater` will generate a smooth deceleration velocity for the `final_waypoints` using a spline. In order to prevent deceleration taking too long, a parameter  `MAX_BRAKE_DISTANCE` is defined. We only start to decelerate if the distance between current location and the stopping waypoint is less than `MAX_BRAKE_DISTANCE`.
 
 
-###Waypoint Loader
+### Waypoint Loader
 
 In order to save bandwidth, waypoint_loader only publish `base_waypoints` at rate of 1 hertz, and stop publishing after 5 seconds.
 
