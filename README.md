@@ -112,4 +112,4 @@ roslaunch launch/site.launch
 | Da Yang       |  da.yang@outlook.com  | @day  |
 | Ashish Rana   |  ashish.rana.me@gmail.com  | @mr.jatt  |
 | Michael Tien  |  mtien888@gmail.com   | @mtien888  |
-| Naveed Ahmed |                       | @nahmed |
+| Naveed Ahmed |   naveedahmed04@gmail.com  | @nahmed |
