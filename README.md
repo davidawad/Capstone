@@ -108,7 +108,7 @@ roslaunch launch/site.launch
 
 | name  | email  | username  |
 |---|---|---|
-| David Awad   |  me@davidawad.com     | @davidawad  |
+| David Awad    |  contact@davidawad.com     | @davidawad  |
 | Da Yang       |  da.yang@outlook.com  | @day  |
 | Ashish Rana   |  ashish.rana.me@gmail.com  | @mr.jatt  |
 | Michael Tien  |  mtien888@gmail.com   | @mtien888  |
