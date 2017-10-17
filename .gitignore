@@ -5,3 +5,7 @@ build
 devel
 
 profile.tmp
+
+tl_detector_sim_train/
+.ipynb_checkpoints
+train_data_sim/*.jpg

@@ -11,8 +11,22 @@ import tf
 import cv2
 import yaml
 import numpy as np
+import os
+from time import strftime
 
 STATE_COUNT_THRESHOLD = 3
+
+def clamp(n, smallest, largest): 
+    return max(smallest, min(n, largest))
+
+def generate_training_data(dst_folder, img, state):
+    if not os.path.isdir(dst_folder):
+        os.makedirs(dst_folder)
+    
+    time = strftime("%Y%m%d_%H%M%S")
+    res = cv2.resize(img, (64, 64) ,interpolation=cv2.INTER_CUBIC)
+    filename = '{}/{}_state_{}.jpg'.format(dst_folder, time, state)
+    cv2.imwrite(filename, res)
 
 class TLDetector(object):
     def __init__(self):
@@ -23,11 +37,22 @@ class TLDetector(object):
         self.camera_image = None
         self.lights = []
 
+        self.state = TrafficLight.UNKNOWN
+        self.last_state = TrafficLight.UNKNOWN
+        self.last_wp = -1
+        self.state_count = 0
+        self.light_waypoints = []
+        self.light_indexed = False
+
+        self.bridge = CvBridge()
+        self.light_classifier = TLClassifier()
+        self.listener = tf.TransformListener()
+
         self.pose_sub = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         self.base_wp_sub = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         '''
-        /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and 
+        /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
         helps you acquire an accurate ground truth data source for the traffic light
         classifier by sending the current color state of all traffic lights in the
         simulator. When testing on the vehicle, the color state will not be available. You'll need to
@@ -41,14 +66,15 @@ class TLDetector(object):
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
-        self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
-        self.listener = tf.TransformListener()
 
-        self.state = TrafficLight.UNKNOWN
-        self.last_state = TrafficLight.UNKNOWN
-        self.last_wp = -1
-        self.state_count = 0
+
+
+
+
+
+        if self.config['debug_img']:
+            self.debug_img_pub = rospy.Publisher('/debug_img', Image, 
+                queue_size=1)
 
         self.light_waypoints = []
         self.light_indexed = False
@@ -70,8 +96,8 @@ class TLDetector(object):
                     + (light_pos.z - wp_pos.z)**2
                 )
                 distances.append((i, distance))
-            distances.sort(key=lambda d: d[1])
-            waypoint_indices = map(lambda d: d[0], distances)
+            distances.sort(key=lambda e: e[1])
+            waypoint_indices = map(lambda e: e[0], distances)
             self.light_waypoints.append(waypoint_indices)
         self.light_indexed = True
 
@@ -98,6 +124,9 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
+        if (self.waypoints is None):
+            return
+
         light_wp, state = self.process_traffic_lights()
 
         '''
@@ -119,48 +148,59 @@ class TLDetector(object):
         self.state_count += 1
 
     def get_closest_light(self, pose):
-        """Identifies the closest path waypoint to the given position
-            https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
-        Args:
-            pose (Pose): position to match a waypoint to
-
+        """
         Returns:
-            int: index of the closest waypoint in self.waypoints
+            int: index of the closest direct light
 
         """
         #TODO implement
+
         ego_pos = np.array([
             self.pose.pose.position.x,
-            self.pose.pose.position.y,
-            self.pose.pose.position.z
+            self.pose.pose.position.y
         ])
-        rot = tf.transformations.quaternion_matrix(np.array([
+
+        rot_quat = np.array([
             self.pose.pose.orientation.x,
             self.pose.pose.orientation.y,
             self.pose.pose.orientation.z,
             self.pose.pose.orientation.w,
-        ]))
-        init_dir = np.array([1.0, 0., 0., 0.])
-        ego_dir = np.matmul(init_dir, rot)[:3]
-        min_dist = float('inf')
-        light_index = None
+        ])
 
+        rot = tf.transformations.quaternion_matrix(rot_quat)
+        init_dir = np.array([1.0, 0., 0., 0.])
+        ego_dir = np.matmul(rot, init_dir)[:2]
+        # normalized
+        ego_dir = ego_dir / np.linalg.norm(ego_dir)
+        min_dist = 100
+        candidates = []
         for i, light in enumerate(self.lights):
             light_pos = np.array([
-                light.pose.pose.position.x, 
-                light.pose.pose.position.y, 
-                light.pose.pose.position.z])
+                light.pose.pose.position.x,
+                light.pose.pose.position.y])
+
             light_dir = light_pos - ego_pos
-            if np.dot(ego_dir, light_dir) > 0:
-                distance = np.linalg.norm(ego_pos - light_pos)
-                if distance < min_dist:
-                    light_index = i
-                    min_dist = distance
+            # normalized
+            light_dir = light_dir / np.linalg.norm(light_dir)
+            # angle between light_dir & ego_dir
+            cos_theta = np.dot(ego_dir, light_dir)
+            distance = np.linalg.norm(ego_pos - light_pos)
+            if distance < min_dist:
+                candidates.append((i, cos_theta, distance))
 
-        return light_index
+        if candidates:
+            # chose the smallest angle
+            candidates.sort(key=lambda e: e[1])
+            
+            index, cos_theta, distance = candidates[0]
+            
+            if cos_theta > 0:
+                return index
+        else:
+            return -1
 
-    def project_to_image_plane(self, point_in_world):
-        """Project point from 3D world coordinates to 2D camera image location
+    def project_to_image_plane(self, *points):
+        """Project points from 3D world coordinates to 2D camera image location
 
         Args:
             point_in_world (Point): 3D location of a point in the world
@@ -178,6 +218,8 @@ class TLDetector(object):
 
         # get transform between pose of camera and world frame
         trans = None
+        rot = None
+
         try:
             now = rospy.Time.now()
             self.listener.waitForTransform("/base_link",
@@ -188,12 +230,40 @@ class TLDetector(object):
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
 
-        #TODO Use tranform and rotation to calculate 2D position of light in image
-
         x = 0
         y = 0
+        cx = image_width * 0.5
+        cy = image_height * 0.5
 
-        return (x, y)
+        if trans is None or rot is None:
+            return [(x, y) for _ in points ]
+
+        camera_mat = self.listener.fromTranslationRotation(trans, rot)
+
+        # if in simulator, use the tweak (not accurate)
+        # since udacity can't provide the intrinsic parameters
+        zc_offset = 0.
+        if fx < 10.0:
+            fx = 2574
+            fy = 2744
+            cx = image_width * 0.5 - 35.
+            cy = image_height + 50
+            zc_offset = -1.0
+
+        result = []
+        for p in points:
+            # use homogenous coordinate
+            point_in_world = np.array([p[0], p[1], p[2], 1.0])
+            # point_in_world = np.array([p.x, p.y, p.z, 1.0])
+            point_in_camera = np.matmul(camera_mat, point_in_world)
+            xc, yc, zc, _ = point_in_camera
+            zc += zc_offset
+
+            x = int(- fx * yc / xc + cx)
+            y = int(- fy * zc / xc + cy)
+            result.append((x, y))
+        
+        return result
 
     def get_light_state(self, light):
         """Determines the current color of the traffic light
@@ -210,18 +280,62 @@ class TLDetector(object):
             return False
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        h, w, _ = cv_image.shape
 
-        x, y = self.project_to_image_plane(light.pose.pose.position)
+        size = 1
+        rot_quat = [
+            self.pose.pose.orientation.x,
+            self.pose.pose.orientation.y,
+            self.pose.pose.orientation.z,
+            self.pose.pose.orientation.w,
+        ]
+        rot = tf.transformations.quaternion_matrix(rot_quat)
+        init_dir = np.array([1.0, 0., 0., 0.])
+        ego_dir = np.matmul(rot, init_dir)[:3]
+        ego_dir = ego_dir / np.linalg.norm(ego_dir)
+        light_normal = -ego_dir
+        up = np.array([0.,0.,1.])
+        down = -up
+        left = np.cross(light_normal, up)
+        left = left / np.linalg.norm(left)
+        right = -left
+        light_center = [light.pose.pose.position.x, light.pose.pose.position.y, light.pose.pose.position.z]
+        top_left = light_center + size * up + size * left
+        bottom_right = light_center + size * down + size * right
 
-        #TODO use light location to zoom in on traffic light in image
+        tl, br = self.project_to_image_plane(top_left, bottom_right)
 
-        #Get classification
-        # return self.light_classifier.get_classification(cv_image)
-        return light.state
+        if tl[0] < w and tl[1] < h and br[0] > 0 and br[1] > 0:
+            tl = (clamp(tl[0], 0, w), clamp(tl[1], 0, h))
+            br = (clamp(br[0], 0, w), clamp(br[1], 0, h))
+            
+            if self.config['debug_img']:
+                cv2.rectangle(cv_image, tl, br, (0, 255, 0), 2)
+                debug_img = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
+                self.debug_img_pub.publish(debug_img)
+
+            #TODO use light location to zoom in on traffic light in image
+            roi = cv_image[tl[1]:br[1], tl[0]:br[0]]
+            roi_h, roi_w, _ = roi.shape
+            if roi_w > 0 and roi_h > 0:
+                if self.config['generate_train']:
+                    light_state = light.state
+
+                    dst_folder = self.config['samples_folder']
+                    generate_training_data(dst_folder, roi, light_state)
+                    return light_state
+                else:
+                    test = cv2.resize(roi, (64, 64) ,interpolation=cv2.INTER_CUBIC)
+                    # TODO classifier
+                    #Get classification
+                    tl_state = self.light_classifier.get_classification(test)
+                    return tl_state
+
+        return TrafficLight.UNKNOWN
+
 
     def get_light_wp(self, light_index):
         way_points = self.light_waypoints[light_index]
-        
         return way_points[0]
 
     def process_traffic_lights(self):
@@ -229,7 +343,7 @@ class TLDetector(object):
             location and color
 
         Returns:
-            int: index of waypoint closes to the upcoming traffic light (-1 if none exists)
+            int: index of waypoint closes to the upcoming stop line for a traffic light (-1 if none exists)
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
@@ -238,13 +352,20 @@ class TLDetector(object):
         if(self.pose):
             light_index = self.get_closest_light(self.pose.pose)
 
-        if light_index is not None:
-            light = self.lights[light_index]
-            light_wp = self.get_light_wp(light_index)
-            state = self.get_light_state(light)
-            return light_wp, state
+        if light_index > -1:
+            if self.light_indexed:
+                light = self.lights[light_index]
+                light_wp = self.get_light_wp(light_index)
+                state = self.get_light_state(light)
+                return light_wp, state
+            else:
+                return -1, TrafficLight.UNKNOWN
+        else:
+            if light_index == -1:
+                if self.config['generate_train']:
+                    pass
 
-        return -1, TrafficLight.UNKNOWN
+            return -1, TrafficLight.UNKNOWN
 
 if __name__ == '__main__':
     try:
