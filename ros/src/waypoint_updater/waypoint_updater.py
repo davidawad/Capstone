@@ -24,13 +24,8 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-<<<<<<< HEAD
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 MAX_BRAKE_DISTANCE = 60 # distance to start brake 
-=======
-LOOKAHEAD_WPS = 60 # Number of waypoints we will publish. You can change this number
-MAX_BRAKE_DISTANCE = 30 # distance to start brake 
->>>>>>> origin/day
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -57,30 +52,18 @@ class WaypointUpdater(object):
         self.final_waypoints_index_pub = rospy.Publisher('final_index', Int32, queue_size=1)
 
         # TODO: Add other member variables you need below
-<<<<<<< HEAD
         # self.published = False
-=======
-        self.published = False
->>>>>>> origin/day
         self.loop()
 
     def loop(self):
         rate = rospy.Rate(0.5) # 0.5Hz
         while not rospy.is_shutdown():
 
-<<<<<<< HEAD
             if (self.pose is not None) and (self.waypoints is not None): # and not self.published:
                 self.update_final_waypoints()
                 self.publish_final_waypoints()
 
             # self.published = False
-=======
-            if (self.pose is not None) and (self.waypoints is not None) and not self.published:
-                self.update_final_waypoints()
-                self.publish_final_waypoints()
-
-            self.published = False
->>>>>>> origin/day
             rate.sleep()
         rospy.spin()
 
@@ -107,11 +90,7 @@ class WaypointUpdater(object):
             if (self.pose is not None) and (self.waypoints is not None):
                 self.update_final_waypoints()
                 self.publish_final_waypoints()
-<<<<<<< HEAD
                 # self.published = True
-=======
-                self.published = True
->>>>>>> origin/day
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
