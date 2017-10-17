@@ -63,6 +63,7 @@ class TLDetector(object):
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
+        self.stop_line_positions = self.config['stop_line_positions']
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
@@ -335,8 +336,35 @@ class TLDetector(object):
 
 
     def get_light_wp(self, light_index):
-        way_points = self.light_waypoints[light_index]
-        return way_points[0]
+        waypoint_indices = self.light_waypoints[light_index]
+        wp_near_light = self.waypoints[waypoint_indices[0]].pose.pose.position
+
+        min_dist = float('inf')
+        target_stop_line = None
+        for stop_line_pos in self.stop_line_positions:
+            dist = (
+                (wp_near_light.x - stop_line_pos[0]) ** 2
+                + (wp_near_light.y - stop_line_pos[1]) ** 2
+            )
+            if dist < min_dist:
+                min_dist = dist
+                target_stop_line = stop_line_pos
+        
+        min_dist = float('inf')
+        way_point = None
+        # test the first 30 waypoints that are nearest to the light
+        for i in range(30):
+            wp_i = waypoint_indices[i]
+            wp_pos = self.waypoints[wp_i].pose.pose.position
+            dist = (
+                (target_stop_line[0] - wp_pos.x) ** 2
+                + (target_stop_line[1] - wp_pos.y) ** 2
+            )
+            if dist < min_dist:
+                min_dist = dist
+                way_point = wp_i
+
+        return way_point
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
