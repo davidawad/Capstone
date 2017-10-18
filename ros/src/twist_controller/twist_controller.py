@@ -46,7 +46,7 @@ class Controller(object):
         	brake = 0
         else:
         	throttle = 0
-        	brake = torque
+        	brake = torque * (2 + (del_vel**2))
 
 
         # Get Time difference
