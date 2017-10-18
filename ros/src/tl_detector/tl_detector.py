@@ -13,6 +13,7 @@ import yaml
 import numpy as np
 import os
 from time import strftime
+import math
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -85,7 +86,7 @@ class TLDetector(object):
     def pose_cb(self, msg):
         self.pose = msg
 
-    def index_lights(self):
+    def build_light_waypoints(self):
         for light in self.lights:
             light_pos = light.pose.pose.position
             distances = []
@@ -94,7 +95,7 @@ class TLDetector(object):
                 distance = (
                     (light_pos.x - wp_pos.x)**2
                     + (light_pos.y - wp_pos.y)**2
-                    + (light_pos.z - wp_pos.z)**2
+                    # + (light_pos.z - wp_pos.z)**2
                 )
                 distances.append((i, distance))
             distances.sort(key=lambda e: e[1])
@@ -107,13 +108,13 @@ class TLDetector(object):
         self.base_wp_sub.unregister()
 
         if self.waypoints and self.lights and not self.light_indexed:
-            self.index_lights()
+            self.build_light_waypoints()
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
 
         if self.waypoints and self.lights and not self.light_indexed:
-            self.index_lights()
+            self.build_light_waypoints()
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -154,8 +155,6 @@ class TLDetector(object):
             int: index of the closest direct light
 
         """
-        #TODO implement
-
         ego_pos = np.array([
             self.pose.pose.position.x,
             self.pose.pose.position.y
@@ -173,7 +172,7 @@ class TLDetector(object):
         ego_dir = np.matmul(rot, init_dir)[:2]
         # normalized
         ego_dir = ego_dir / np.linalg.norm(ego_dir)
-        min_dist = 100
+        min_dist = 150
         candidates = []
         for i, light in enumerate(self.lights):
             light_pos = np.array([
@@ -336,31 +335,65 @@ class TLDetector(object):
 
 
     def get_light_wp(self, light_index):
+        ego_pos = np.array([
+            self.pose.pose.position.x,
+            self.pose.pose.position.y
+        ])
+
+        rot_quat = np.array([
+            self.pose.pose.orientation.x,
+            self.pose.pose.orientation.y,
+            self.pose.pose.orientation.z,
+            self.pose.pose.orientation.w,
+        ])
+
+        rot = tf.transformations.quaternion_matrix(rot_quat)
+        init_dir = np.array([1.0, 0., 0., 0.])
+        ego_dir = np.matmul(rot, init_dir)[:2]
+        # normalized
+        ego_dir = ego_dir / np.linalg.norm(ego_dir)
+
+
         waypoint_indices = self.light_waypoints[light_index]
         wp_near_light = self.waypoints[waypoint_indices[0]].pose.pose.position
 
-        min_dist = float('inf')
+        # It's impossible the stop line coulde be further than 50 meters from the traffic light
+        min_dist = 50
         target_stop_line = None
         for stop_line_pos in self.stop_line_positions:
-            dist = (
+            dist = math.sqrt(
                 (wp_near_light.x - stop_line_pos[0]) ** 2
                 + (wp_near_light.y - stop_line_pos[1]) ** 2
             )
-            if dist < min_dist:
+            stop_line_nparray = np.array([stop_line_pos[0], stop_line_pos[1]])
+            ego_to_stop = stop_line_nparray - ego_pos
+            ego_to_stop = ego_to_stop / np.linalg.norm(ego_to_stop) # normalized
+            cos_stop = np.dot(ego_dir, ego_to_stop)
+
+            if cos_stop > 0 and dist < min_dist:
                 min_dist = dist
                 target_stop_line = stop_line_pos
         
+        if target_stop_line is None:
+            return -1
+
         min_dist = float('inf')
-        way_point = None
-        # test the first 30 waypoints that are nearest to the light
-        for i in range(30):
+        way_point = -1
+        # test the first 50 waypoints that are nearest to the light
+        for i in range(50):
             wp_i = waypoint_indices[i]
             wp_pos = self.waypoints[wp_i].pose.pose.position
             dist = (
                 (target_stop_line[0] - wp_pos.x) ** 2
                 + (target_stop_line[1] - wp_pos.y) ** 2
             )
-            if dist < min_dist:
+            
+            wp_nparray = np.array([wp_pos.x, wp_pos.y])
+            ego_to_wp = wp_nparray - ego_pos
+            ego_to_wp = ego_to_wp / np.linalg.norm(ego_to_wp) # normalized
+            cos_wp = np.dot(ego_dir, ego_to_wp)
+
+            if cos_wp > 0. and dist < min_dist:
                 min_dist = dist
                 way_point = wp_i
 
