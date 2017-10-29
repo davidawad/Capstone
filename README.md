@@ -109,7 +109,7 @@ roslaunch launch/site.launch
 | name  | email  | username  |
 |---|---|---|
 | David Awad    |  contact@davidawad.com     | @davidawad  |
-| Da Yang       |  da.yang@outlook.com  | @day  |
-| Ashish Rana   |  ashish.rana.me@gmail.com  | @mr.jatt  |
-| Michael Tien  |  mtien888@gmail.com   | @mtien888  |
-| Naveed Ahmed |   naveedahmed04@gmail.com  | @nahmed |
+| Da Yang       |    | @day  |
+| Ashish Rana   |    | @mr.jatt  |
+| Michael Tien  |    | @mtien888  |
+| Naveed Ahmed |     | @nahmed |
