@@ -1,6 +1,6 @@
 # Capstone
 
-This is our Capstone project repo for the final project of the Udacity Self-Driving Car Nanodegree. The goal of this project is to enable a car to drive itself around a controlled track that contains traffic lights.
+This is our Capstone project repo for the final project of the Udacity Self-Driving Car Nanodegree. The goal of this project is to enable a car to drive itself around a controlled track that contains traffic lights that will be recognized and responded to.
 
 ![](https://raw.githubusercontent.com/davidawad/Capstone/master/imgs/Udacity-Self-Driving-Car.png)
 
